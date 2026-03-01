@@ -16,6 +16,7 @@ import os
 import sys
 
 from database import Database
+from connectors import ConnectorManager, CONNECTORS
 
 # ── Theme & Constants ──
 ctk.set_appearance_mode("dark")
@@ -50,6 +51,7 @@ class SecureAccessApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.db = Database()
+        self.connector_mgr = ConnectorManager(self.db)
         self.title("SecureAccess — User Access Management")
         self.geometry("1400x850")
         self.minsize(1100, 700)
@@ -89,6 +91,7 @@ class SecureAccessApp(ctk.CTk):
             ("🔍  Access Reviews", self.show_reviews),
             ("📜  Audit Log", self.show_audit),
             ("⚙️  Password Policy", self.show_policy),
+            ("🔗  Integrations", self.show_integrations),
             ("📊  Reports", self.show_reports),
         ]
         for text, command in nav_items:
@@ -1012,6 +1015,198 @@ class SecureAccessApp(ctk.CTk):
 
         ctk.CTkButton(card, text="Save Policy", fg_color=COLORS['accent_green'], command=save_policy).pack(pady=15)
 
+
+    # ══════════════════════════════════════════════
+    #  INTEGRATIONS
+    # ══════════════════════════════════════════════
+    def show_integrations(self):
+        self._clear_main()
+        self._set_active_nav("\U0001f517  Integrations")
+        self._make_header("System Integrations", "Connect to external identity providers and infrastructure")
+
+        scroll = ctk.CTkScrollableFrame(self.main_frame, fg_color="transparent")
+        scroll.pack(fill="both", expand=True, padx=30, pady=(0, 20))
+
+        for conn in self.connector_mgr.get_all_connectors():
+            card = ctk.CTkFrame(scroll, fg_color=COLORS['bg_card'], corner_radius=12)
+            card.pack(fill="x", padx=5, pady=6)
+
+            top = ctk.CTkFrame(card, fg_color="transparent")
+            top.pack(fill="x", padx=15, pady=(12, 5))
+
+            ctk.CTkLabel(top, text=f"{conn.icon}  {conn.display_name}",
+                         font=ctk.CTkFont(size=17, weight="bold")).pack(side="left")
+
+            status_color = COLORS['accent_green'] if conn.connected else COLORS['text_dim']
+            status_text = "\u25cf CONNECTED" if conn.connected else "\u25cf DISCONNECTED"
+            ctk.CTkLabel(top, text=status_text, font=ctk.CTkFont(size=12, weight="bold"),
+                         text_color=status_color).pack(side="right")
+
+            ctk.CTkLabel(card, text=conn.description, font=ctk.CTkFont(size=12),
+                         text_color=COLORS['text_dim']).pack(padx=15, anchor="w")
+
+            # Config summary
+            config_items = []
+            for k, v in conn.config.items():
+                if "password" in k.lower() or "secret" in k.lower() or "token" in k.lower() or "key" in k.lower():
+                    config_items.append(f"{k}: \u2022\u2022\u2022\u2022\u2022\u2022")
+                elif isinstance(v, bool):
+                    config_items.append(f"{k}: {'Yes' if v else 'No'}")
+                else:
+                    config_items.append(f"{k}: {v}")
+            config_text = "  |  ".join(config_items[:4])
+            if len(config_items) > 4:
+                config_text += f"  | +{len(config_items)-4} more"
+            ctk.CTkLabel(card, text=config_text, font=ctk.CTkFont(size=11),
+                         text_color=COLORS['text_dim'], wraplength=900).pack(padx=15, anchor="w", pady=(2, 0))
+
+            # Buttons
+            btn_frame = ctk.CTkFrame(card, fg_color="transparent")
+            btn_frame.pack(fill="x", padx=15, pady=(8, 12))
+
+            cname = conn.name
+            if conn.connected:
+                ctk.CTkButton(btn_frame, text="Disconnect", width=100, height=30,
+                             fg_color=COLORS['accent_orange'],
+                             command=lambda c=cname: self._disconnect_connector(c)).pack(side="left", padx=3)
+                ctk.CTkButton(btn_frame, text="Test", width=80, height=30,
+                             fg_color=COLORS['accent_blue'],
+                             command=lambda c=cname: self._test_connector(c)).pack(side="left", padx=3)
+                ctk.CTkButton(btn_frame, text="Provision Log", width=110, height=30,
+                             fg_color=COLORS['bg_sidebar'],
+                             command=lambda c=cname: self._show_provision_log(c)).pack(side="left", padx=3)
+            else:
+                ctk.CTkButton(btn_frame, text="Connect", width=100, height=30,
+                             fg_color=COLORS['accent_green'], hover_color="#00a884",
+                             command=lambda c=cname: self._connect_connector(c)).pack(side="left", padx=3)
+                ctk.CTkButton(btn_frame, text="Configure", width=100, height=30,
+                             command=lambda c=cname: self._configure_connector(c)).pack(side="left", padx=3)
+
+            # Show recent provisioning activity if connected
+            if conn.connected and conn.provision_log:
+                recent = conn.provision_log[-3:]
+                ctk.CTkLabel(card, text="Recent Activity:", font=ctk.CTkFont(size=11, weight="bold"),
+                             text_color=COLORS['accent_blue']).pack(padx=15, anchor="w")
+                for log in reversed(recent):
+                    color = COLORS['accent_green'] if log.success else COLORS['critical']
+                    ctk.CTkLabel(card, text=f"  {'\u2713' if log.success else '\u2717'} [{log.action}] {log.target_user}: {log.details[:80]}",
+                                 font=ctk.CTkFont(size=10), text_color=color, wraplength=900).pack(padx=15, anchor="w")
+                ctk.CTkFrame(card, height=8, fg_color="transparent").pack()
+
+    def _connect_connector(self, name):
+        conn = self.connector_mgr.get_connector(name)
+        if conn:
+            conn.connect()
+            if conn.connected:
+                self.db.log_audit('admin', 'CONNECTOR_CONNECTED', 'connector', None,
+                                  conn.display_name, f"Connected to {conn.display_name}")
+            self.show_integrations()
+
+    def _disconnect_connector(self, name):
+        conn = self.connector_mgr.get_connector(name)
+        if conn:
+            conn.disconnect()
+            self.db.log_audit('admin', 'CONNECTOR_DISCONNECTED', 'connector', None,
+                              conn.display_name, f"Disconnected from {conn.display_name}")
+            self.show_integrations()
+
+    def _test_connector(self, name):
+        conn = self.connector_mgr.get_connector(name)
+        if conn:
+            result = conn.test_connection()
+            status = "SUCCESS" if result.success else "FAILED"
+            messagebox.showinfo(f"Connection Test",
+                               f"Connector: {conn.display_name}\nStatus: {status}\n\nDetails:\n{result.details}"
+                               + (f"\n\nError: {result.error}" if result.error else ""))
+
+    def _configure_connector(self, name):
+        conn = self.connector_mgr.get_connector(name)
+        if not conn:
+            return
+
+        dialog = ctk.CTkToplevel(self)
+        dialog.title(f"Configure \u2014 {conn.display_name}")
+        dialog.geometry("500x600")
+        dialog.transient(self)
+        dialog.grab_set()
+
+        ctk.CTkLabel(dialog, text=f"{conn.icon}  Configure {conn.display_name}",
+                     font=ctk.CTkFont(size=18, weight="bold")).pack(pady=(20, 5))
+        ctk.CTkLabel(dialog, text=conn.description, font=ctk.CTkFont(size=11),
+                     text_color=COLORS['text_dim'], wraplength=440).pack(padx=30, pady=(0, 15))
+
+        scroll = ctk.CTkScrollableFrame(dialog, height=350)
+        scroll.pack(fill="x", padx=20, pady=(0, 10))
+
+        entries = {}
+        for field_def in conn.config_fields:
+            key = field_def["key"]
+            label = field_def.get("label", key)
+            ftype = field_def.get("type", "text")
+
+            if ftype == "checkbox":
+                var = ctk.BooleanVar(value=bool(conn.config.get(key, False)))
+                ctk.CTkCheckBox(scroll, text=label, variable=var).pack(anchor="w", padx=10, pady=4)
+                entries[key] = ("checkbox", var)
+            else:
+                ctk.CTkLabel(scroll, text=label, font=ctk.CTkFont(size=12)).pack(padx=10, anchor="w", pady=(6, 0))
+                entry = ctk.CTkEntry(scroll, width=420,
+                                     placeholder_text=field_def.get("placeholder", ""),
+                                     show="*" if ftype == "password" else "")
+                current = conn.config.get(key, "")
+                if current and ftype != "password":
+                    entry.insert(0, str(current))
+                entry.pack(padx=10, pady=(0, 2))
+                entries[key] = ("text", entry)
+
+        def save_config():
+            for key, (ftype, widget) in entries.items():
+                if ftype == "checkbox":
+                    conn.config[key] = widget.get()
+                else:
+                    val = widget.get().strip()
+                    if val:
+                        conn.config[key] = val
+            self.db.log_audit('admin', 'CONNECTOR_CONFIGURED', 'connector', None,
+                              conn.display_name, f"Configuration updated for {conn.display_name}", 'warning')
+            dialog.destroy()
+            self.show_integrations()
+
+        ctk.CTkButton(dialog, text="Save Configuration", fg_color=COLORS['accent_green'],
+                      command=save_config).pack(pady=15)
+
+    def _show_provision_log(self, name):
+        conn = self.connector_mgr.get_connector(name)
+        if not conn:
+            return
+
+        dialog = ctk.CTkToplevel(self)
+        dialog.title(f"Provisioning Log \u2014 {conn.display_name}")
+        dialog.geometry("800x500")
+        dialog.transient(self)
+
+        ctk.CTkLabel(dialog, text=f"{conn.icon}  Provisioning Log \u2014 {conn.display_name}",
+                     font=ctk.CTkFont(size=18, weight="bold")).pack(pady=15)
+
+        scroll = ctk.CTkScrollableFrame(dialog)
+        scroll.pack(fill="both", expand=True, padx=15, pady=(0, 15))
+
+        if not conn.provision_log:
+            ctk.CTkLabel(scroll, text="No provisioning activity yet.",
+                         text_color=COLORS['text_dim']).pack(pady=20)
+        else:
+            for log in reversed(conn.provision_log):
+                row = ctk.CTkFrame(scroll, fg_color=COLORS['bg_dark'], corner_radius=8)
+                row.pack(fill="x", padx=5, pady=3)
+                color = COLORS['accent_green'] if log.success else COLORS['critical']
+                icon = "\u2713" if log.success else "\u2717"
+                ctk.CTkLabel(row, text=f"{icon} [{log.action}] {log.target_user}",
+                             font=ctk.CTkFont(size=13, weight="bold"), text_color=color).pack(padx=10, pady=(6, 0), anchor="w")
+                ctk.CTkLabel(row, text=log.details, font=ctk.CTkFont(size=11),
+                             text_color=COLORS['text_dim'], wraplength=720).pack(padx=10, anchor="w")
+                ctk.CTkLabel(row, text=log.timestamp[:19], font=ctk.CTkFont(size=10),
+                             text_color=COLORS['text_dim']).pack(padx=10, pady=(0, 6), anchor="w")
+
     # ══════════════════════════════════════════════
     #  REPORTS
     # ══════════════════════════════════════════════
@@ -1153,4 +1348,5 @@ class SecureAccessApp(ctk.CTk):
 if __name__ == "__main__":
     app = SecureAccessApp()
     app.mainloop()
-
+
+
