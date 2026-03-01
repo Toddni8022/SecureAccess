@@ -93,7 +93,7 @@ class Database:
                 reviewed_by TEXT,
                 review_notes TEXT,
                 expires_at TEXT,
-                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (role_id) REFERENCES roles(id)
             );
 
@@ -144,7 +144,7 @@ class Database:
                 decided_at TEXT,
                 notes TEXT,
                 FOREIGN KEY (review_id) REFERENCES access_reviews(id) ON DELETE CASCADE,
-                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (role_id) REFERENCES roles(id)
             );
         """)
@@ -441,3 +441,4 @@ class Database:
 
     def close(self):
         self.conn.close()
+

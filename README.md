@@ -69,7 +69,7 @@ A professional desktop application for security teams to manage user identities,
 ### Option 1: Run from Source
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/SecureAccess.git
+git clone https://github.com/Toddni8022/SecureAccess.git
 cd SecureAccess
 
 # Install dependencies
@@ -89,7 +89,7 @@ python build.py
 ```
 
 ### Option 3: Download Pre-built
-Download the latest release from the [Releases](https://github.com/yourusername/SecureAccess/releases) page.
+Download the latest release from the [Releases](https://github.com/Toddni8022/SecureAccess/releases) page.
 
 ## Tech Stack
 
@@ -141,3 +141,4 @@ MIT License — See LICENSE file for details.
 ---
 
 **Built by Todd Nicholas** | Security Professional Portfolio Project
+
