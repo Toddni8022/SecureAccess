@@ -295,7 +295,7 @@ class SecureAccessApp(ctk.CTk):
     def _add_user_dialog(self):
         dialog = ctk.CTkToplevel(self)
         dialog.title("Add New User")
-        dialog.geometry("450x550")
+        dialog.geometry("450x650")
         dialog.transient(self)
         dialog.grab_set()
 
@@ -359,7 +359,7 @@ class SecureAccessApp(ctk.CTk):
 
         dialog = ctk.CTkToplevel(self)
         dialog.title(f"Edit User — {user['username']}")
-        dialog.geometry("450x550")
+        dialog.geometry("450x650")
         dialog.transient(self)
         dialog.grab_set()
 
@@ -540,7 +540,7 @@ class SecureAccessApp(ctk.CTk):
     def _add_role_dialog(self):
         dialog = ctk.CTkToplevel(self)
         dialog.title("Create New Role")
-        dialog.geometry("450x500")
+        dialog.geometry("450x600")
         dialog.transient(self)
         dialog.grab_set()
 
@@ -591,7 +591,7 @@ class SecureAccessApp(ctk.CTk):
             return
         dialog = ctk.CTkToplevel(self)
         dialog.title(f"Edit Role — {role['name']}")
-        dialog.geometry("450x500")
+        dialog.geometry("450x600")
         dialog.transient(self)
         dialog.grab_set()
 
@@ -725,7 +725,7 @@ class SecureAccessApp(ctk.CTk):
     def _new_request_dialog(self):
         dialog = ctk.CTkToplevel(self)
         dialog.title("New Access Request")
-        dialog.geometry("450x400")
+        dialog.geometry("450x480")
         dialog.transient(self)
         dialog.grab_set()
 
@@ -1153,3 +1153,4 @@ class SecureAccessApp(ctk.CTk):
 if __name__ == "__main__":
     app = SecureAccessApp()
     app.mainloop()
+
