@@ -1,0 +1,13 @@
+[run]
+source = src,database,connectors
+omit =
+    tests/*
+    build.py
+    */site-packages/*
+
+[report]
+show_missing = true
+skip_empty = true
+
+[html]
+directory = htmlcov

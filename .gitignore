@@ -1,8 +1,72 @@
+# Python
 __pycache__/
-*.pyc
-build/
-dist/
-*.spec
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+*.egg
 *.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+
+# PyInstaller
+*.spec
+*.manifest
+
+# Virtual environments
 .env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Secrets and environment
+.env
+.env.*
+!.env.example
+
+# Database
 secureaccess.db
+*.db
+*.sqlite3
+
+# Testing
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Type checking
+.mypy_cache/
+
+# Linting
+.ruff_cache/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Distribution
+*.tar.gz
+*.zip
+*.whl
+
+# Logs
+*.log
+logs/

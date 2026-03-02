@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  app:
+    build: .
+    image: secureaccess:latest
+    container_name: secureaccess
+    volumes:
+      - secureaccess_data:/root/.local/share/SecureAccess
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+    network_mode: host
+    restart: unless-stopped
+
+volumes:
+  secureaccess_data:
+    driver: local
