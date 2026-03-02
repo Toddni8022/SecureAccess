@@ -5,7 +5,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database import Database
+from src.secure_access.database import Database  # noqa: E402
 
 
 class TestDatabase:

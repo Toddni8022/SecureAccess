@@ -5,7 +5,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from connectors import (
+from src.secure_access.connectors import (  # noqa: E402
     BaseConnector,
     ProvisioningResult,
     ActiveDirectoryConnector,
@@ -141,7 +141,7 @@ class TestConnectorManager:
     """Tests for ConnectorManager."""
 
     def test_manager_initializes(self, tmp_path):
-        from database import Database
+        from src.secure_access.database import Database
         db_path = str(tmp_path / "test.db")
         db = Database(db_path=db_path)
         mgr = ConnectorManager(db)
