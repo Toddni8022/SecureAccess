@@ -9,6 +9,8 @@ jobs:
   build-windows:
     name: Build Windows Executable
     runs-on: windows-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,6 +27,8 @@ jobs:
   build-macos:
     name: Build macOS Executable
     runs-on: macos-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -41,6 +45,8 @@ jobs:
   build-linux:
     name: Build Linux Executable
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
