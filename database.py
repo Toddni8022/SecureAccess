@@ -8,8 +8,46 @@ import os
 import hashlib
 import secrets
 import json
+import bcrypt
 from datetime import datetime, timedelta
 from pathlib import Path
+
+# Allowed column names for dynamic INSERT/UPDATE queries (prevents SQL injection)
+_ALLOWED_USER_COLS = {
+    'username', 'display_name', 'email', 'department', 'title', 'status',
+    'mfa_enabled', 'mfa_method', 'password_hash', 'password_changed_at',
+    'password_expires_at', 'last_login', 'failed_login_count', 'locked_until',
+    'updated_at', 'created_by', 'notes',
+}
+_ALLOWED_ROLE_COLS = {
+    'name', 'description', 'permissions', 'risk_level', 'max_session_hours',
+    'requires_mfa', 'updated_at',
+}
+_ALLOWED_POLICY_COLS = {
+    'min_length', 'require_uppercase', 'require_lowercase', 'require_digits',
+    'require_special', 'max_age_days', 'history_count', 'lockout_threshold',
+    'lockout_duration_minutes', 'updated_at',
+}
+
+
+def hash_password(password: str) -> str:
+    """Hash a plaintext password using bcrypt."""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    """Verify a plaintext password against a bcrypt hash."""
+    try:
+        return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+    except Exception:
+        return False
+
+
+def _validate_cols(cols: set, allowed: set, entity: str):
+    """Raise ValueError if any column name is not in the allowed set."""
+    unknown = cols - allowed
+    if unknown:
+        raise ValueError(f"Invalid {entity} column(s): {', '.join(sorted(unknown))}")
 
 
 def get_db_path():
@@ -239,6 +277,10 @@ class Database:
         return self.conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
 
     def create_user(self, **kwargs):
+        # Hash plaintext password if provided
+        if 'password' in kwargs:
+            kwargs['password_hash'] = hash_password(kwargs.pop('password'))
+        _validate_cols(set(kwargs.keys()), _ALLOWED_USER_COLS, 'user')
         cols = ', '.join(kwargs.keys())
         placeholders = ', '.join(['?'] * len(kwargs))
         self.conn.execute(f"INSERT INTO users ({cols}) VALUES ({placeholders})", list(kwargs.values()))
@@ -247,7 +289,11 @@ class Database:
                        kwargs.get('username', ''), f"User {kwargs.get('display_name')} created")
 
     def update_user(self, user_id, **kwargs):
+        # Hash plaintext password if provided
+        if 'password' in kwargs:
+            kwargs['password_hash'] = hash_password(kwargs.pop('password'))
         kwargs['updated_at'] = datetime.now().isoformat()
+        _validate_cols(set(kwargs.keys()), _ALLOWED_USER_COLS, 'user')
         sets = ', '.join(f"{k} = ?" for k in kwargs.keys())
         self.conn.execute(f"UPDATE users SET {sets} WHERE id = ?", list(kwargs.values()) + [user_id])
         self.conn.commit()
@@ -267,6 +313,7 @@ class Database:
         return self.conn.execute("SELECT * FROM roles WHERE id = ?", (role_id,)).fetchone()
 
     def create_role(self, **kwargs):
+        _validate_cols(set(kwargs.keys()), _ALLOWED_ROLE_COLS, 'role')
         cols = ', '.join(kwargs.keys())
         placeholders = ', '.join(['?'] * len(kwargs))
         self.conn.execute(f"INSERT INTO roles ({cols}) VALUES ({placeholders})", list(kwargs.values()))
@@ -274,6 +321,7 @@ class Database:
 
     def update_role(self, role_id, **kwargs):
         kwargs['updated_at'] = datetime.now().isoformat()
+        _validate_cols(set(kwargs.keys()), _ALLOWED_ROLE_COLS, 'role')
         sets = ', '.join(f"{k} = ?" for k in kwargs.keys())
         self.conn.execute(f"UPDATE roles SET {sets} WHERE id = ?", list(kwargs.values()) + [role_id])
         self.conn.commit()
@@ -373,6 +421,7 @@ class Database:
 
     def update_password_policy(self, **kwargs):
         kwargs['updated_at'] = datetime.now().isoformat()
+        _validate_cols(set(kwargs.keys()), _ALLOWED_POLICY_COLS, 'password_policy')
         sets = ', '.join(f"{k} = ?" for k in kwargs.keys())
         self.conn.execute(f"UPDATE password_policy SET {sets} WHERE id = 1", list(kwargs.values()))
         self.conn.commit()
