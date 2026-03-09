@@ -12,7 +12,7 @@ def build():
 
     # Install dependencies
     print("\n📦 Installing dependencies...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements-dev.txt"])
 
     # Build with PyInstaller
     print("\n🔨 Building executable...")
