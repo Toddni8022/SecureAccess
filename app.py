@@ -1089,7 +1089,8 @@ class SecureAccessApp(ctk.CTk):
                              text_color=COLORS['accent_blue']).pack(padx=15, anchor="w")
                 for log in reversed(recent):
                     color = COLORS['accent_green'] if log.success else COLORS['critical']
-                    ctk.CTkLabel(card, text=f"  {'\u2713' if log.success else '\u2717'} [{log.action}] {log.target_user}: {log.details[:80]}",
+                    check = '\u2713' if log.success else '\u2717'
+                    ctk.CTkLabel(card, text=f"  {check} [{log.action}] {log.target_user}: {log.details[:80]}",
                                  font=ctk.CTkFont(size=10), text_color=color, wraplength=900).pack(padx=15, anchor="w")
                 ctk.CTkFrame(card, height=8, fg_color="transparent").pack()
 
