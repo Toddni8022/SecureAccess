@@ -1,143 +1,175 @@
-# 🛡️ SecureAccess — User Access Management Platform
+# SecureAccess
 
-A professional desktop application for security teams to manage user identities, role-based access control, access requests, compliance reviews, and audit logging.
+SecureAccess is a Python desktop application for identity and access management workflows. It is built as a security portfolio project that models the work security, IT, and compliance teams do every day: user lifecycle management, role-based access control, access requests, periodic reviews, audit trails, reports, and system provisioning.
 
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
-![Python](https://img.shields.io/badge/python-3.10+-green)
-![License](https://img.shields.io/badge/license-MIT-orange)
+The project now includes a security foundation layer with authenticated launch, password hashing, role permission resolution, session tracking, tamper-evident audit logging, JSON backup export, and automated tests.
 
-## Features
+## Why this project matters
 
-### 📊 Dashboard
-- Real-time security posture overview
-- User status breakdown (active, inactive, locked, pending)
-- MFA coverage metrics
-- Pending request alerts
-- Role distribution visualization
+A lot of security portfolio projects are either toy login screens or generic dashboards. SecureAccess is different because it focuses on a real business problem: how teams manage who has access to what, why they have it, who approved it, and whether that access is still appropriate.
 
-### 👥 User Management
-- Full CRUD operations for user accounts
-- Status management (active, inactive, locked, pending review)
-- MFA tracking per user
-- Department and title assignment
-- Search and filter capabilities
-- CSV export
+## Current capabilities
 
-### 🔑 Role-Based Access Control (RBAC)
-- Define roles with risk levels (low, medium, high, critical)
-- Set maximum session durations per role
-- MFA requirements per role
-- Assign/revoke roles with justification tracking
-- Role member visibility
+### Desktop IAM workflow
 
-### 📋 Access Request Workflow
-- Submit access grant/revoke requests
-- Business justification requirements
-- Approve/deny workflow with reviewer tracking
-- Request history and status tracking
+- Dashboard for user status, MFA coverage, pending requests, and audit warnings
+- User CRUD with search, filtering, MFA tracking, department, title, notes, and CSV export
+- Role-based access control with risk levels, session duration, MFA requirements, assignments, revocations, and justification tracking
+- Access request workflow for grant, revoke, and modify requests
+- Periodic access reviews for certification and revocation workflows
+- Audit log search, severity filtering, and export
+- Password policy management
+- Compliance report generation
+- Integration panel for provisioning connectors
 
-### 🔍 Periodic Access Reviews
-- Create quarterly/periodic access certification campaigns
-- Review all user-role assignments
-- Certify or revoke access per item
-- Track review completion status
-- Due date management
+### Security foundation
 
-### 📜 Audit Logging
-- Complete immutable audit trail
-- Severity levels (info, warning, critical)
-- Search and filter capabilities
-- CSV export for compliance reporting
+- Authenticated launcher in `secure_launcher.py`
+- Password hashing with bcrypt when available
+- PBKDF2 fallback for environments without bcrypt
+- Password policy validation
+- Failed login tracking and lockout
+- Session creation, validation, and revocation
+- Role permission backfill and permission resolution
+- Tamper-evident audit log hashing with previous-hash chaining
+- Audit chain verification
+- JSON backup export with SHA-256 manifest
+- Automated unit tests for authentication, password policy, lockout, audit integrity, and backups
 
-### ⚙️ Password Policy Management
-- Configurable minimum length, complexity requirements
-- Password expiration settings
-- Account lockout thresholds and duration
-- Password history enforcement
+### Connectors
 
-### 📊 Compliance Reports
-- User Access Report
-- MFA Compliance Report
-- Privileged Access Report
-- Inactive Users Report
-- Role Summary Report
-- Audit Summary
-- All reports exportable to CSV
+SecureAccess includes a connector framework for:
 
-## Installation
+- Active Directory / LDAP
+- Microsoft Entra ID
+- AWS IAM
+- Linux / PAM over SSH
+- Okta
+- MySQL / PostgreSQL style database access
 
-### Option 1: Run from Source
+The current connector implementations are demo/simulation connectors that show realistic provisioning flows and responses. They are designed so live connector modes can be added incrementally without rewriting the app.
+
+## Install and run
+
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/SecureAccess.git
+git clone https://github.com/Toddni8022/SecureAccess.git
 cd SecureAccess
-
-# Install dependencies
 pip install -r requirements.txt
+python secure_launcher.py
+```
 
-# Run
+Default demo login:
+
+```text
+Username: admin
+Password: SecureAccess!ChangeMe1
+```
+
+For a safer first launch, set an environment variable before running:
+
+```bash
+set SECUREACCESS_BOOTSTRAP_PASSWORD=YourStrongPasswordHere
+python secure_launcher.py
+```
+
+On macOS or Linux:
+
+```bash
+export SECUREACCESS_BOOTSTRAP_PASSWORD="YourStrongPasswordHere"
+python secure_launcher.py
+```
+
+You can still run the original unauthenticated UI for development:
+
+```bash
 python app.py
 ```
 
-### Option 2: Build Standalone Executable
+## Run tests
+
 ```bash
-# Install dependencies + build
-python build.py
-
-# The executable will be in dist/SecureAccess.exe (Windows)
-# or dist/SecureAccess (macOS/Linux)
+python -m unittest discover -s tests
 ```
 
-### Option 3: Download Pre-built
-Download the latest release from the [Releases](https://github.com/yourusername/SecureAccess/releases) page.
+## Project structure
 
-## Tech Stack
-
-- **Python 3.10+** — Core language
-- **CustomTkinter** — Modern dark-themed GUI framework
-- **SQLite** — Embedded database (zero configuration)
-- **PyInstaller** — Cross-platform executable packaging
-
-## Architecture
-
-```
+```text
 SecureAccess/
-├── app.py              # Main application (GUI + logic)
-├── database.py         # Database layer (SQLite ORM)
-├── build.py            # PyInstaller build script
-├── requirements.txt    # Python dependencies
-└── README.md           # This file
+├── app.py                     # Main CustomTkinter desktop application
+├── secure_launcher.py          # Authenticated launcher
+├── security_core.py            # Auth, sessions, audit integrity, backups, permissions
+├── database.py                 # SQLite persistence layer
+├── connectors.py               # Provisioning connector framework
+├── build.py                    # PyInstaller build script
+├── requirements.txt            # Runtime dependencies
+├── tests/
+│   └── test_security_core.py   # Security core unit tests
+├── docs/
+│   ├── architecture.md         # Architecture and trust boundaries
+│   └── production-hardening.md # Honest production readiness notes
+└── README.md
 ```
 
-**Data Storage:** SQLite database stored in user's local app data:
-- Windows: `%LOCALAPPDATA%\SecureAccess\secureaccess.db`
-- macOS: `~/.local/share/SecureAccess/secureaccess.db`
-- Linux: `~/.local/share/SecureAccess/secureaccess.db`
+## Data storage
 
-## Security Considerations
+SecureAccess stores its SQLite database in the user's local application data folder:
 
-- All actions are logged to an immutable audit trail
-- Role-based access with risk-level classification
-- MFA tracking and compliance reporting
-- Password policy enforcement
-- Access review workflows for periodic certification
-- Data stored locally — no cloud dependencies
+```text
+Windows: %LOCALAPPDATA%\SecureAccess\secureaccess.db
+macOS:   ~/.local/share/SecureAccess/secureaccess.db
+Linux:   ~/.local/share/SecureAccess/secureaccess.db
+```
 
-## Use Cases
+## What is production-like vs simulated
 
-- **SOC Teams**: Manage analyst access levels and certifications
-- **IT Security**: Enforce least-privilege access policies
-- **Compliance**: Generate audit-ready reports for SOX, HIPAA, PCI-DSS
-- **Small/Medium Businesses**: Lightweight IAM without enterprise cost
+Production-like pieces:
 
-## Screenshots
+- Password hashing
+- Password policy checks
+- Failed login lockout
+- Session table
+- Permission resolution from role JSON
+- Tamper-evident audit hashes
+- Audit chain verification
+- JSON backup export with SHA-256
+- Automated tests
 
-*Run the application to see the modern dark-themed UI with dashboard, user management, role-based access control, and compliance reporting.*
+Simulated pieces:
+
+- External identity provider provisioning
+- Live AD / Entra / AWS / Okta / Linux changes
+- Enterprise-grade immutable storage
+- Full SSO / MFA enforcement
+- Centralized secret management
+
+That distinction is intentional. This is a portfolio project that shows the architecture and security thinking clearly without pretending to be a drop-in enterprise IAM product.
+
+## Roadmap to true 10/10
+
+1. Wire permission checks directly into every GUI action
+2. Add one real live connector mode, preferably AWS IAM with boto3 or Linux SSH with Paramiko
+3. Add encrypted local backups
+4. Add screenshots and a 90-second demo video
+5. Add GitHub release builds for Windows
+6. Add role review evidence packets for auditors
+7. Add SSO support using OIDC
+8. Add a read-only compliance dashboard
+
+## Tech stack
+
+- Python 3.10+
+- CustomTkinter
+- SQLite
+- bcrypt with PBKDF2 fallback
+- PyInstaller
+- unittest
+
+## Security note
+
+SecureAccess is a security portfolio project and should not be deployed as-is to manage real production identities. The code now includes stronger security foundations, but a real enterprise deployment would still require professional review, hardened secret handling, real SSO/MFA, secure update delivery, centralized logging, and a tested recovery process.
 
 ## License
 
-MIT License — See LICENSE file for details.
+MIT License
 
----
-
-**Built by Todd Nicholas** | Security Professional Portfolio Project
+Built by Todd Nicholas
