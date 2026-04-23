@@ -5,7 +5,9 @@ A professional desktop application for security teams to manage user identities,
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 ![Python](https://img.shields.io/badge/python-3.10+-green)
 ![License](https://img.shields.io/badge/license-MIT-orange)
+## Demo Video
 
+[![Watch Demo](https://img.youtube.com/vi/YOUR_VIDEO_ID/0.jpg)](https://youtu.be/mvwK6DWcMtg)
 ## Features
 
 ### 📊 Dashboard
@@ -141,4 +143,5 @@ MIT License — See LICENSE file for details.
 ---
 
 **Built by Todd Nicholas** | Security Professional Portfolio Project
-
+
+
