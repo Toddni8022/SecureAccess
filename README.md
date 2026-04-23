@@ -2,7 +2,7 @@
 
 SecureAccess is a Python desktop application for identity and access management workflows. It is built as a security portfolio project that models the work security, IT, and compliance teams do every day: user lifecycle management, role-based access control, access requests, periodic reviews, audit trails, reports, and system provisioning.
 
-The project now includes a security foundation layer with authenticated launch, password hashing, role permission resolution, session tracking, tamper-evident audit logging, JSON backup export, and automated tests.
+The project now includes a security foundation layer with authenticated launch, password hashing, role permission resolution, session tracking, tamper-evident audit logging, JSON backup export, automated tests, and a dry-run-first live Linux SSH connector.
 
 ## Why this project matters
 
@@ -47,7 +47,7 @@ SecureAccess includes a connector framework for:
 - Okta
 - MySQL / PostgreSQL style database access
 
-The current connector implementations are demo/simulation connectors that show realistic provisioning flows and responses. They are designed so live connector modes can be added incrementally without rewriting the app.
+The original connector implementations are demo/simulation connectors that show realistic provisioning flows and responses. The project now also includes `live_linux_connector.py`, a real Linux SSH connector path that is dry-run by default and requires explicit environment variables before it can mutate a host.
 
 ## Install and run
 
@@ -85,6 +85,28 @@ You can still run the original unauthenticated UI for development:
 python app.py
 ```
 
+## Live Linux connector
+
+Dry-run mode is enabled by default:
+
+```bash
+python live_linux_cli.py test
+python live_linux_cli.py create-user jdoe "Jane Doe" jdoe@example.com
+python live_linux_cli.py assign-group jdoe security
+```
+
+To use live mode against a sandbox host you control:
+
+```bash
+set SECUREACCESS_LINUX_HOST=192.168.56.10
+set SECUREACCESS_LINUX_USER=secureaccess
+set SECUREACCESS_LINUX_KEY=C:\Users\Todd\.ssh\id_ed25519
+set SECUREACCESS_LINUX_DRY_RUN=0
+python live_linux_cli.py test
+```
+
+Use live mode only in a lab or sandbox. Dry-run output shows the exact commands before anything is executed.
+
 ## Run tests
 
 ```bash
@@ -95,18 +117,22 @@ python -m unittest discover -s tests
 
 ```text
 SecureAccess/
-├── app.py                     # Main CustomTkinter desktop application
-├── secure_launcher.py          # Authenticated launcher
-├── security_core.py            # Auth, sessions, audit integrity, backups, permissions
-├── database.py                 # SQLite persistence layer
-├── connectors.py               # Provisioning connector framework
-├── build.py                    # PyInstaller build script
-├── requirements.txt            # Runtime dependencies
+├── app.py                          # Main CustomTkinter desktop application
+├── secure_launcher.py               # Authenticated launcher
+├── security_core.py                 # Auth, sessions, audit integrity, backups, permissions
+├── database.py                      # SQLite persistence layer
+├── connectors.py                    # Demo provisioning connector framework
+├── live_linux_connector.py          # Dry-run-first live Linux SSH connector
+├── live_linux_cli.py                # CLI runner for Linux connector
+├── build.py                         # PyInstaller build script
+├── requirements.txt                 # Runtime dependencies
 ├── tests/
-│   └── test_security_core.py   # Security core unit tests
+│   ├── test_security_core.py        # Security core unit tests
+│   └── test_live_linux_connector.py # Live connector dry-run tests
 ├── docs/
-│   ├── architecture.md         # Architecture and trust boundaries
-│   └── production-hardening.md # Honest production readiness notes
+│   ├── architecture.md              # Architecture and trust boundaries
+│   ├── demo-script.md               # 90-second recording script
+│   └── production-hardening.md      # Honest production readiness notes
 └── README.md
 ```
 
@@ -133,11 +159,11 @@ Production-like pieces:
 - Audit chain verification
 - JSON backup export with SHA-256
 - Automated tests
+- Live Linux SSH connector with dry-run safety
 
 Simulated pieces:
 
-- External identity provider provisioning
-- Live AD / Entra / AWS / Okta / Linux changes
+- Live AD / Entra / AWS / Okta provisioning
 - Enterprise-grade immutable storage
 - Full SSO / MFA enforcement
 - Centralized secret management
@@ -147,13 +173,12 @@ That distinction is intentional. This is a portfolio project that shows the arch
 ## Roadmap to true 10/10
 
 1. Wire permission checks directly into every GUI action
-2. Add one real live connector mode, preferably AWS IAM with boto3 or Linux SSH with Paramiko
+2. Add screenshots and a 90-second demo video
 3. Add encrypted local backups
-4. Add screenshots and a 90-second demo video
-5. Add GitHub release builds for Windows
-6. Add role review evidence packets for auditors
-7. Add SSO support using OIDC
-8. Add a read-only compliance dashboard
+4. Add GitHub release builds for Windows
+5. Add role review evidence packets for auditors
+6. Add SSO support using OIDC
+7. Add a read-only compliance dashboard
 
 ## Tech stack
 
@@ -161,6 +186,7 @@ That distinction is intentional. This is a portfolio project that shows the arch
 - CustomTkinter
 - SQLite
 - bcrypt with PBKDF2 fallback
+- Paramiko
 - PyInstaller
 - unittest
 
