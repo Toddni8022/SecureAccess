@@ -6,3 +6,6 @@ dist/
 *.egg-info/
 .env
 secureaccess.db
+.coverage
+htmlcov/
+.pytest_cache/
