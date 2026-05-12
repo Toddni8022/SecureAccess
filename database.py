@@ -8,6 +8,7 @@ import os
 import hashlib
 import secrets
 import json
+import hmac
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -147,8 +148,33 @@ class Database:
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (role_id) REFERENCES roles(id)
             );
+
+            CREATE TABLE IF NOT EXISTS password_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                password_hash TEXT NOT NULL,
+                changed_at TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
         """)
         self.conn.commit()
+
+    @staticmethod
+    def _hash_password(password, salt=None):
+        salt = salt or secrets.token_hex(16)
+        digest = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 260000).hex()
+        return f"pbkdf2_sha256${salt}${digest}"
+
+    @staticmethod
+    def _verify_password(password, stored_hash):
+        if not stored_hash or '$' not in stored_hash:
+            return False
+        try:
+            _, salt, expected = stored_hash.split('$', 2)
+        except ValueError:
+            return False
+        candidate = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 260000).hex()
+        return hmac.compare_digest(candidate, expected)
 
     def _seed_defaults(self):
         """Seed default data if tables are empty."""
@@ -191,6 +217,15 @@ class Database:
                     "INSERT INTO users (username, display_name, email, department, title, status, mfa_enabled, mfa_method) VALUES (?,?,?,?,?,?,?,?)",
                     u
                 )
+        # Backfill secure password hashes for demo users if missing.
+        for user in self.conn.execute("SELECT id, username, password_hash FROM users").fetchall():
+            if not user['password_hash']:
+                ph = self._hash_password(f"{user['username']}123!Secure")
+                self.conn.execute(
+                    "UPDATE users SET password_hash=?, password_changed_at=datetime('now'), password_expires_at=datetime('now', '+90 days') WHERE id=?",
+                    (ph, user['id'])
+                )
+                self.conn.execute("INSERT INTO password_history (user_id, password_hash) VALUES (?,?)", (user['id'], ph))
             # Assign some roles
             role_assignments = [
                 (1, 1, 'System setup'), (2, 5, 'Standard access'), (2, 6, 'Project needs'),
@@ -201,7 +236,7 @@ class Database:
             ]
             for uid, rid, just in role_assignments:
                 self.conn.execute(
-                    "INSERT INTO user_roles (user_id, role_id, granted_by, justification) VALUES (?, ?, 'system', ?)",
+                    "INSERT OR IGNORE INTO user_roles (user_id, role_id, granted_by, justification) VALUES (?, ?, 'system', ?)",
                     (uid, rid, just)
                 )
             # Sample audit entries
@@ -251,6 +286,68 @@ class Database:
         sets = ', '.join(f"{k} = ?" for k in kwargs.keys())
         self.conn.execute(f"UPDATE users SET {sets} WHERE id = ?", list(kwargs.values()) + [user_id])
         self.conn.commit()
+
+    # ── Authentication & Password Security ──
+    def authenticate_user(self, username, password, source_ip='unknown'):
+        user = self.conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        if not user:
+            self.log_audit('anonymous', 'FAILED_LOGIN', 'user', None, username, f"Unknown username from {source_ip}", 'warning')
+            return False, 'Invalid credentials'
+
+        policy = self.get_password_policy()
+        if user['locked_until']:
+            locked_until = datetime.fromisoformat(user['locked_until'])
+            if locked_until > datetime.utcnow():
+                return False, 'Account temporarily locked'
+
+        if not self._verify_password(password, user['password_hash']):
+            failed_count = user['failed_login_count'] + 1
+            updates = {'failed_login_count': failed_count}
+            if failed_count >= policy['lockout_threshold']:
+                updates['locked_until'] = (datetime.utcnow() + timedelta(minutes=policy['lockout_duration_minutes'])).isoformat()
+                updates['status'] = 'locked'
+            self.update_user(user['id'], **updates)
+            self.log_audit(username, 'FAILED_LOGIN', 'user', user['id'], username, f"Invalid password from {source_ip}", 'warning')
+            return False, 'Invalid credentials'
+
+        self.update_user(user['id'], failed_login_count=0, locked_until=None, status='active', last_login=datetime.utcnow().isoformat())
+        self.log_audit(username, 'USER_LOGIN', 'user', user['id'], username, f"Successful login from {source_ip}", 'info')
+        return True, 'Authenticated'
+
+    def set_user_password(self, user_id, new_password, actor='admin'):
+        policy = self.get_password_policy()
+        self._validate_password_policy(new_password, policy)
+        recent_hashes = self.conn.execute(
+            "SELECT password_hash FROM password_history WHERE user_id = ? ORDER BY changed_at DESC LIMIT ?",
+            (user_id, policy['history_count'])
+        ).fetchall()
+        for row in recent_hashes:
+            if self._verify_password(new_password, row['password_hash']):
+                raise ValueError("Password was used recently.")
+
+        password_hash = self._hash_password(new_password)
+        expires_at = datetime.utcnow() + timedelta(days=policy['max_age_days'])
+        self.update_user(
+            user_id,
+            password_hash=password_hash,
+            password_changed_at=datetime.utcnow().isoformat(),
+            password_expires_at=expires_at.isoformat(),
+        )
+        self.conn.execute("INSERT INTO password_history (user_id, password_hash) VALUES (?,?)", (user_id, password_hash))
+        self.conn.commit()
+        self.log_audit(actor, 'PASSWORD_CHANGED', 'user', user_id, str(user_id), 'Password updated', 'info')
+
+    def _validate_password_policy(self, password, policy):
+        if len(password) < policy['min_length']:
+            raise ValueError(f"Password must be at least {policy['min_length']} characters.")
+        if policy['require_uppercase'] and not any(c.isupper() for c in password):
+            raise ValueError("Password must include uppercase.")
+        if policy['require_lowercase'] and not any(c.islower() for c in password):
+            raise ValueError("Password must include lowercase.")
+        if policy['require_digits'] and not any(c.isdigit() for c in password):
+            raise ValueError("Password must include digits.")
+        if policy['require_special'] and password.isalnum():
+            raise ValueError("Password must include special characters.")
 
     def delete_user(self, user_id):
         user = self.get_user(user_id)
@@ -441,4 +538,85 @@ class Database:
 
     def close(self):
         self.conn.close()
-
+
+    # ── SecAI+ Analytics ──
+    def analyze_audit_log_ai(self, lookback_days=30):
+        events = self.conn.execute(
+            "SELECT * FROM audit_log WHERE timestamp > datetime('now', ?) ORDER BY timestamp DESC",
+            (f'-{lookback_days} days',)
+        ).fetchall()
+        findings = []
+        for event in events:
+            action = (event['action'] or '').upper()
+            if action == 'FAILED_LOGIN':
+                findings.append({
+                    'event_id': event['id'],
+                    'severity': 'high',
+                    'explanation': 'Observed failed authentication event pattern consistent with credential attacks.',
+                    'mapping': {'mitre_attack': 'T1110 Brute Force', 'cwe': 'CWE-307'}
+                })
+            if action in ('ROLE_GRANTED', 'ROLE_REVOKED', 'ACCESS_REQUEST_CREATED'):
+                findings.append({
+                    'event_id': event['id'],
+                    'severity': 'medium',
+                    'explanation': 'Privileged access lifecycle action requires governance review.',
+                    'mapping': {'mitre_attack': 'T1078 Valid Accounts'}
+                })
+        return {
+            'total_events': len(events),
+            'high_risk_findings': len([f for f in findings if f['severity'] == 'high']),
+            'findings': findings[:25]
+        }
+
+    def detect_access_anomalies(self, failed_login_threshold=4):
+        rows = self.conn.execute("""
+            SELECT actor, COUNT(*) AS failed_count
+            FROM audit_log
+            WHERE action='FAILED_LOGIN' AND timestamp > datetime('now', '-1 day')
+            GROUP BY actor
+        """).fetchall()
+        anomalies = []
+        for row in rows:
+            if row['failed_count'] >= failed_login_threshold:
+                anomalies.append({
+                    'actor': row['actor'],
+                    'anomaly_score': min(100, 40 + row['failed_count'] * 10),
+                    'explanation': 'Failed login burst detected in last 24h.',
+                    'mapping': {'mitre_attack': 'T1110 Brute Force'}
+                })
+        return anomalies
+
+    def explainable_risk_score(self, user_id=None, role_id=None, request_id=None):
+        score, factors = 0, []
+        if user_id:
+            user = self.get_user(user_id)
+            if user:
+                if not user['mfa_enabled']:
+                    score += 30; factors.append('MFA disabled (+30)')
+                if user['status'] == 'locked':
+                    score += 25; factors.append('Account is locked (+25)')
+                if user['failed_login_count'] > 0:
+                    delta = min(30, user['failed_login_count'] * 5)
+                    score += delta; factors.append(f"Failed login count {user['failed_login_count']} (+{delta})")
+        if role_id:
+            role = self.get_role(role_id)
+            if role:
+                role_weight = {'low': 5, 'medium': 15, 'high': 30, 'critical': 45}[role['risk_level']]
+                score += role_weight; factors.append(f"Role risk {role['risk_level']} (+{role_weight})")
+                if role['requires_mfa']:
+                    score += 10; factors.append('Role requires MFA (+10)')
+        if request_id:
+            req = self.conn.execute("SELECT * FROM access_requests WHERE id = ?", (request_id,)).fetchone()
+            if req and req['request_type'] == 'grant':
+                score += 15; factors.append('Privilege grant request (+15)')
+        score = min(100, score)
+        tier = 'low' if score < 25 else 'medium' if score < 50 else 'high' if score < 75 else 'critical'
+        return {
+            'score': score,
+            'tier': tier,
+            'factors': factors,
+            'mapping': ['MITRE ATT&CK T1078', 'CWE-307']
+        }
+
+
+
