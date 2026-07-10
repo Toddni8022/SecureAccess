@@ -42,6 +42,13 @@ class SecurityLogicTests(unittest.TestCase):
         self.assertIn('score', risk)
         self.assertIn('factors', risk)
 
+    def test_dynamic_columns_are_allowlisted(self):
+        with self.assertRaises(ValueError):
+            self.db.update_user(1, **{'status = ? WHERE 1=1 --': 'active'})
+        with self.assertRaises(ValueError):
+            self.db.create_role(**{'name': 'viewer', 'DROP TABLE users': 'x'})
+        self.assertIsNotNone(self.db.get_user(1))
+
 
 if __name__ == '__main__':
     unittest.main()
