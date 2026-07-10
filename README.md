@@ -1,148 +1,72 @@
-# 🛡️ SecureAccess — User Access Management Platform
+# 🛡️ SecureAccess — SecAI+ Access Governance Workbench
 
-A professional desktop application for security teams to manage user identities, role-based access control, access requests, compliance reviews, and audit logging.
+SecureAccess is a desktop IAM/RBAC project upgraded for **SecAI+ relevance**: deterministic credential security, AI-assisted audit analysis, anomaly detection, and explainable risk scoring aligned to attacker behavior frameworks.
 
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
-![Python](https://img.shields.io/badge/python-3.10+-green)
-![License](https://img.shields.io/badge/license-MIT-orange)
-## Demo Video
+## What’s New (SecAI+)
+- Real password hashing and validation using PBKDF2-HMAC-SHA256 with salted hashes and constant-time compare.
+- Credential lockout enforcement based on configurable policy thresholds.
+- AI-assisted audit log triage (`analyze_audit_log_ai`) with MITRE ATT&CK/CWE mappings.
+- Access anomaly detection (`detect_access_anomalies`) for failed login bursts.
+- Explainable risk scoring (`explainable_risk_score`) for users/roles/requests with transparent scoring factors.
+- Security tests for authentication, password policy/history, analytics, and risk logic.
 
-DEMO Of Secure Access
-[![Watch Demo](https://img.youtube.com/vi/YOUR_VIDEO_ID/0.jpg)](https://youtu.be/mvwK6DWcMtg)
-## Features
+## Existing Features (Preserved)
+- Dashboard, users, roles, access requests, access reviews, audit log, password policy, integrations, and reports.
 
-### 📊 Dashboard
-- Real-time security posture overview
-- User status breakdown (active, inactive, locked, pending)
-- MFA coverage metrics
-- Pending request alerts
-- Role distribution visualization
-
-### 👥 User Management
-- Full CRUD operations for user accounts
-- Status management (active, inactive, locked, pending review)
-- MFA tracking per user
-- Department and title assignment
-- Search and filter capabilities
-- CSV export
-
-### 🔑 Role-Based Access Control (RBAC)
-- Define roles with risk levels (low, medium, high, critical)
-- Set maximum session durations per role
-- MFA requirements per role
-- Assign/revoke roles with justification tracking
-- Role member visibility
-
-### 📋 Access Request Workflow
-- Submit access grant/revoke requests
-- Business justification requirements
-- Approve/deny workflow with reviewer tracking
-- Request history and status tracking
-
-### 🔍 Periodic Access Reviews
-- Create quarterly/periodic access certification campaigns
-- Review all user-role assignments
-- Certify or revoke access per item
-- Track review completion status
-- Due date management
-
-### 📜 Audit Logging
-- Complete immutable audit trail
-- Severity levels (info, warning, critical)
-- Search and filter capabilities
-- CSV export for compliance reporting
-
-### ⚙️ Password Policy Management
-- Configurable minimum length, complexity requirements
-- Password expiration settings
-- Account lockout thresholds and duration
-- Password history enforcement
-
-### 📊 Compliance Reports
-- User Access Report
-- MFA Compliance Report
-- Privileged Access Report
-- Inactive Users Report
-- Role Summary Report
-- Audit Summary
-- All reports exportable to CSV
-
-## Installation
-
-### Option 1: Run from Source
+## Demo / Run Instructions
 ```bash
-# Clone the repository
-git clone https://github.com/Toddni8022/SecureAccess.git
-cd SecureAccess
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Run
 python app.py
 ```
 
-### Option 2: Build Standalone Executable
+### Security Logic Demo (CLI)
 ```bash
-# Install dependencies + build
-python build.py
-
-# The executable will be in dist/SecureAccess.exe (Windows)
-# or dist/SecureAccess (macOS/Linux)
+python -m unittest tests/test_security_logic.py
 ```
-
-### Option 3: Download Pre-built
-Download the latest release from the [Releases](https://github.com/Toddni8022/SecureAccess/releases) page.
-
-## Tech Stack
-
-- **Python 3.10+** — Core language
-- **CustomTkinter** — Modern dark-themed GUI framework
-- **SQLite** — Embedded database (zero configuration)
-- **PyInstaller** — Cross-platform executable packaging
-
-## Architecture
-
-```
-SecureAccess/
-├── app.py              # Main application (GUI + logic)
-├── database.py         # Database layer (SQLite ORM)
-├── build.py            # PyInstaller build script
-├── requirements.txt    # Python dependencies
-└── README.md           # This file
-```
-
-**Data Storage:** SQLite database stored in user's local app data:
-- Windows: `%LOCALAPPDATA%\SecureAccess\secureaccess.db`
-- macOS: `~/.local/share/SecureAccess/secureaccess.db`
-- Linux: `~/.local/share/SecureAccess/secureaccess.db`
-
-## Security Considerations
-
-- All actions are logged to an immutable audit trail
-- Role-based access with risk-level classification
-- MFA tracking and compliance reporting
-- Password policy enforcement
-- Access review workflows for periodic certification
-- Data stored locally — no cloud dependencies
-
-## Use Cases
-
-- **SOC Teams**: Manage analyst access levels and certifications
-- **IT Security**: Enforce least-privilege access policies
-- **Compliance**: Generate audit-ready reports for SOX, HIPAA, PCI-DSS
-- **Small/Medium Businesses**: Lightweight IAM without enterprise cost
 
 ## Screenshots
+1. Run `python app.py` and open **Dashboard** for posture metrics.
+2. Open **Audit Log** and trigger failed login test events via Python shell using `Database.log_audit(...)`.
+3. Export CSV to inspect events used by analytics.
 
-*Run the application to see the modern dark-themed UI with dashboard, user management, role-based access control, and compliance reporting.*
+## Threat Model (Condensed)
+### Assets
+- User credentials, role assignments, access request decisions, audit evidence.
+
+### Adversaries
+- External credential attackers (brute force/password spraying).
+- Insider misuse (unauthorized role grants).
+- Compromised internal account with weak MFA hygiene.
+
+### Primary Abuse Paths
+- Credential guessing against privileged users.
+- Silent privilege escalation through role grants.
+- Repeated failed logins preceding account takeover.
+
+### Defensive Controls in this Project
+- Salted password hashing and password-history reuse prevention.
+- Policy-driven lockout and failed login counters.
+- Audit triage heuristics mapped to MITRE ATT&CK (T1110, T1078) and CWE-307.
+- Explainable risk factors supporting analyst review.
+
+## Security Limitations
+- AI analysis is heuristic and local; this is not an ML SOC pipeline.
+- No external threat intel enrichment feed yet.
+- No signed audit records / tamper-evident log chain.
+- Desktop app has no built-in centralized identity provider integration for user login UI yet.
+
+## MITRE ATT&CK / CWE Mapping Used
+- **T1110 (Brute Force)**: failed login burst and authentication failures.
+- **T1078 (Valid Accounts)**: role and access lifecycle events.
+- **CWE-307**: excessive authentication attempts.
+
+## Tests
+- `tests/test_security_logic.py` validates new security behavior.
+- GitHub Actions runs authentication, password history, lockout, analytics, risk-scoring, and dynamic SQL column allowlist tests on every change.
+
+## Portfolio Scope
+
+SecureAccess demonstrates local IAM workflow design and defensive security controls. It is not presented as an identity provider or a production replacement for Microsoft Entra ID, Okta, or an enterprise PAM platform. Seeded users and passwords exist strictly for an isolated demonstration database.
 
 ## License
-
-MIT License — See LICENSE file for details.
-
----
-
-**Built by Todd Nicholas** | Security Professional Portfolio Project
-
-
+MIT
