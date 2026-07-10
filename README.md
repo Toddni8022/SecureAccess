@@ -62,6 +62,11 @@ python -m unittest tests/test_security_logic.py
 
 ## Tests
 - `tests/test_security_logic.py` validates new security behavior.
+- GitHub Actions runs authentication, password history, lockout, analytics, risk-scoring, and dynamic SQL column allowlist tests on every change.
+
+## Portfolio Scope
+
+SecureAccess demonstrates local IAM workflow design and defensive security controls. It is not presented as an identity provider or a production replacement for Microsoft Entra ID, Okta, or an enterprise PAM platform. Seeded users and passwords exist strictly for an isolated demonstration database.
 
 ## License
 MIT
