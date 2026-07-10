@@ -9,7 +9,7 @@ import hashlib
 import secrets
 import json
 import hmac
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 
@@ -25,6 +25,21 @@ def get_db_path():
 
 
 class Database:
+    USER_COLUMNS = {
+        'username', 'email', 'display_name', 'department', 'title', 'manager',
+        'status', 'mfa_enabled', 'last_login', 'failed_login_count', 'locked_until',
+        'password_hash', 'password_changed_at', 'password_expires_at', 'updated_at',
+    }
+    ROLE_COLUMNS = {
+        'name', 'description', 'permissions', 'risk_level', 'max_session_hours',
+        'requires_mfa', 'updated_at',
+    }
+    POLICY_COLUMNS = {
+        'min_length', 'require_uppercase', 'require_lowercase', 'require_digits',
+        'require_special', 'max_age_days', 'history_count', 'lockout_threshold',
+        'lockout_duration_minutes', 'updated_at',
+    }
+
     def __init__(self, db_path=None):
         self.db_path = db_path or get_db_path()
         self.conn = sqlite3.connect(self.db_path)
@@ -274,6 +289,7 @@ class Database:
         return self.conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
 
     def create_user(self, **kwargs):
+        self._validate_columns(kwargs, self.USER_COLUMNS)
         cols = ', '.join(kwargs.keys())
         placeholders = ', '.join(['?'] * len(kwargs))
         self.conn.execute(f"INSERT INTO users ({cols}) VALUES ({placeholders})", list(kwargs.values()))
@@ -283,6 +299,7 @@ class Database:
 
     def update_user(self, user_id, **kwargs):
         kwargs['updated_at'] = datetime.now().isoformat()
+        self._validate_columns(kwargs, self.USER_COLUMNS)
         sets = ', '.join(f"{k} = ?" for k in kwargs.keys())
         self.conn.execute(f"UPDATE users SET {sets} WHERE id = ?", list(kwargs.values()) + [user_id])
         self.conn.commit()
@@ -297,20 +314,20 @@ class Database:
         policy = self.get_password_policy()
         if user['locked_until']:
             locked_until = datetime.fromisoformat(user['locked_until'])
-            if locked_until > datetime.utcnow():
+            if locked_until > datetime.now(UTC).replace(tzinfo=None):
                 return False, 'Account temporarily locked'
 
         if not self._verify_password(password, user['password_hash']):
             failed_count = user['failed_login_count'] + 1
             updates = {'failed_login_count': failed_count}
             if failed_count >= policy['lockout_threshold']:
-                updates['locked_until'] = (datetime.utcnow() + timedelta(minutes=policy['lockout_duration_minutes'])).isoformat()
+                updates['locked_until'] = (datetime.now(UTC).replace(tzinfo=None) + timedelta(minutes=policy['lockout_duration_minutes'])).isoformat()
                 updates['status'] = 'locked'
             self.update_user(user['id'], **updates)
             self.log_audit(username, 'FAILED_LOGIN', 'user', user['id'], username, f"Invalid password from {source_ip}", 'warning')
             return False, 'Invalid credentials'
 
-        self.update_user(user['id'], failed_login_count=0, locked_until=None, status='active', last_login=datetime.utcnow().isoformat())
+        self.update_user(user['id'], failed_login_count=0, locked_until=None, status='active', last_login=datetime.now(UTC).replace(tzinfo=None).isoformat())
         self.log_audit(username, 'USER_LOGIN', 'user', user['id'], username, f"Successful login from {source_ip}", 'info')
         return True, 'Authenticated'
 
@@ -326,11 +343,12 @@ class Database:
                 raise ValueError("Password was used recently.")
 
         password_hash = self._hash_password(new_password)
-        expires_at = datetime.utcnow() + timedelta(days=policy['max_age_days'])
+        now = datetime.now(UTC).replace(tzinfo=None)
+        expires_at = now + timedelta(days=policy['max_age_days'])
         self.update_user(
             user_id,
             password_hash=password_hash,
-            password_changed_at=datetime.utcnow().isoformat(),
+            password_changed_at=now.isoformat(),
             password_expires_at=expires_at.isoformat(),
         )
         self.conn.execute("INSERT INTO password_history (user_id, password_hash) VALUES (?,?)", (user_id, password_hash))
@@ -364,6 +382,7 @@ class Database:
         return self.conn.execute("SELECT * FROM roles WHERE id = ?", (role_id,)).fetchone()
 
     def create_role(self, **kwargs):
+        self._validate_columns(kwargs, self.ROLE_COLUMNS)
         cols = ', '.join(kwargs.keys())
         placeholders = ', '.join(['?'] * len(kwargs))
         self.conn.execute(f"INSERT INTO roles ({cols}) VALUES ({placeholders})", list(kwargs.values()))
@@ -371,6 +390,7 @@ class Database:
 
     def update_role(self, role_id, **kwargs):
         kwargs['updated_at'] = datetime.now().isoformat()
+        self._validate_columns(kwargs, self.ROLE_COLUMNS)
         sets = ', '.join(f"{k} = ?" for k in kwargs.keys())
         self.conn.execute(f"UPDATE roles SET {sets} WHERE id = ?", list(kwargs.values()) + [role_id])
         self.conn.commit()
@@ -470,11 +490,18 @@ class Database:
 
     def update_password_policy(self, **kwargs):
         kwargs['updated_at'] = datetime.now().isoformat()
+        self._validate_columns(kwargs, self.POLICY_COLUMNS)
         sets = ', '.join(f"{k} = ?" for k in kwargs.keys())
         self.conn.execute(f"UPDATE password_policy SET {sets} WHERE id = 1", list(kwargs.values()))
         self.conn.commit()
         self.log_audit('admin', 'PASSWORD_POLICY_UPDATED', 'policy', 1, 'Password Policy',
                        json.dumps(kwargs), 'warning')
+
+    @staticmethod
+    def _validate_columns(values, allowed):
+        invalid = set(values) - allowed
+        if invalid:
+            raise ValueError(f"Unsupported database field(s): {', '.join(sorted(invalid))}")
 
     # ── Dashboard Stats ──
     def get_dashboard_stats(self):
